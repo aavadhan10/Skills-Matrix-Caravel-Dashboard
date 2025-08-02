@@ -16,52 +16,76 @@ st.set_page_config(
 
 @st.cache_data
 def load_and_process_data():
-    """Load and process the skills data"""
-    # Sample data - replace this with your actual data loading
-    data = """Name	Skill Matrix Reuslts
-Adrian Dirassar	{"M&A (Skill 120)": 10, "Oil and Gas Regulation (Skill 134)": 9, "Mining (Skill 126)": 8, "Commercial Contracts (Skill 19)": 8, "Debt & Equity Financing (Skill 39)": 7, "Securities and Capital Markets (Skill 157)": 7, "Corporate Bylaws, Records and Governance (Skill 29)": 6, "Purchase and Sale Agreements (Skill 154)": 6, "Joint Ventures and Strategic Alliances (Skill 107)": 6, "Corporate Reorganization (Skill 30)": 5}
-Adrian Roomes	{"Technology Licensing—Software/SaaS (Skill 164)": 8, "Commercial Contracts (Skill 19)": 7, "Privacy Compliance (Skill 143)": 6, "Master Services Agreements (Skill 121)": 7, "Professional Services Agreements and related SOWs (Skill 151)": 6, "Corporate Bylaws, Records and Governance (Skill 29)": 5, "Employment Agreements (Skill 57)": 5, "Securities and Capital Markets (Skill 157)": 5, "M&A (Skill 120)": 4, "Technology Licensing—Hardware (Skill 163)": 4}"""
-    
-    # For demo purposes, I'll create a sample dataset based on the structure you provided
-    # In practice, you would load this from your actual file
-    attorneys_data = []
-    
-    # Sample data based on your format - you'll replace this with actual file reading
-    sample_attorneys = [
-        ("Adrian Dirassar", {"M&A (Skill 120)": 10, "Oil and Gas Regulation (Skill 134)": 9, "Mining (Skill 126)": 8, "Commercial Contracts (Skill 19)": 8, "Debt & Equity Financing (Skill 39)": 7}),
-        ("Adrian Roomes", {"Technology Licensing—Software/SaaS (Skill 164)": 8, "Commercial Contracts (Skill 19)": 7, "Privacy Compliance (Skill 143)": 6, "Master Services Agreements (Skill 121)": 7}),
-        ("Alan Sless", {"Technology Licensing—Software/SaaS (Skill 164)": 9, "Commercial Contracts (Skill 19)": 8, "Procurement (private) & RFPs (Skill 147)": 8, "Litigation (Civil) (Skill 114)": 6}),
-        ("Alex Stack", {"Intellectual Property Protection (Skill 100)": 9, "Patent Prosecution (Skill 137)": 8, "Pharmaceutical Licensing (Skill 140)": 8, "Commercial Contracts (Skill 19)": 7}),
-        ("Aliza Dason", {"Technology Licensing—Software/SaaS (Skill 164)": 10, "Commercial Contracts (Skill 19)": 9, "Master Services Agreements (Skill 121)": 9, "Procurement (private) & RFPs (Skill 147)": 8})
-    ]
-    
-    # Process the data
-    all_skills = {}
-    for name, skills in sample_attorneys:
-        for skill, score in skills.items():
-            if skill not in all_skills:
-                all_skills[skill] = []
-            all_skills[skill].append(score)
-            attorneys_data.append({
-                'Attorney': name,
-                'Skill': skill,
-                'Score': score
-            })
-    
-    df = pd.DataFrame(attorneys_data)
-    
-    # Calculate firm-level statistics
-    firm_stats = {}
-    for skill in all_skills:
-        scores = all_skills[skill]
-        firm_stats[skill] = {
-            'avg_score': np.mean(scores),
-            'max_score': max(scores),
-            'min_score': min(scores),
-            'count': len(scores)
-        }
-    
-    return df, firm_stats
+    """Load and process the skills data from CSV file"""
+    try:
+        # Load the CSV file
+        raw_df = pd.read_csv('Caravel_Results.csv')
+        
+        # Clean column names (remove extra spaces)
+        raw_df.columns = raw_df.columns.str.strip()
+        
+        # Handle the typo in column name
+        if 'Skill Matrix Reuslts' in raw_df.columns:
+            raw_df = raw_df.rename(columns={'Skill Matrix Reuslts': 'Skill Matrix Results'})
+        
+        attorneys_data = []
+        all_skills = {}
+        
+        # Process each attorney's skills
+        for _, row in raw_df.iterrows():
+            name = row['Name'].strip()
+            skills_json = row['Skill Matrix Results']
+            
+            try:
+                # Parse the JSON skills data
+                skills_dict = json.loads(skills_json)
+                
+                # Process each skill for this attorney
+                for skill, score in skills_dict.items():
+                    # Clean skill name and ensure score is numeric
+                    skill_clean = skill.strip()
+                    score_clean = float(score) if isinstance(score, (int, float, str)) else 0
+                    
+                    # Add to all_skills tracking
+                    if skill_clean not in all_skills:
+                        all_skills[skill_clean] = []
+                    all_skills[skill_clean].append(score_clean)
+                    
+                    # Add to attorneys_data
+                    attorneys_data.append({
+                        'Attorney': name,
+                        'Skill': skill_clean,
+                        'Score': score_clean
+                    })
+                    
+            except (json.JSONDecodeError, ValueError) as e:
+                st.warning(f"Could not parse skills data for {name}: {e}")
+                continue
+        
+        # Create DataFrame
+        df = pd.DataFrame(attorneys_data)
+        
+        # Calculate firm-level statistics
+        firm_stats = {}
+        for skill in all_skills:
+            scores = all_skills[skill]
+            if scores:  # Make sure we have data
+                firm_stats[skill] = {
+                    'avg_score': np.mean(scores),
+                    'max_score': max(scores),
+                    'min_score': min(scores),
+                    'count': len(scores)
+                }
+        
+        return df, firm_stats
+        
+    except FileNotFoundError:
+        st.error("❌ Could not find 'Caravel_Results.csv'. Please make sure the file is in the same directory as this script.")
+        # Return empty data to prevent crashes
+        return pd.DataFrame(), {}
+    except Exception as e:
+        st.error(f"❌ Error loading data: {e}")
+        return pd.DataFrame(), {}
 
 def create_skill_overview(firm_stats):
     """Create firm-level skill overview"""
@@ -141,6 +165,17 @@ def main():
     
     # Load data
     df, firm_stats = load_and_process_data()
+    
+    # Check if data loaded successfully
+    if df.empty or not firm_stats:
+        st.error("❌ No data loaded. Please check that 'Caravel_Results.csv' is in the correct location.")
+        st.info("📁 Expected file format: CSV with columns 'Name' and 'Skill Matrix Reuslts' (or 'Skill Matrix Results')")
+        st.stop()
+    
+    # Display data summary in sidebar
+    st.sidebar.success(f"✅ Data loaded automatically!")
+    st.sidebar.info(f"📊 {df['Attorney'].nunique()} attorneys")
+    st.sidebar.info(f"🎯 {len(firm_stats)} unique skills")
     
     # Sidebar
     st.sidebar.title("Navigation")

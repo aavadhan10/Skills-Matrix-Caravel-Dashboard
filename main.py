@@ -37,14 +37,44 @@ def load_and_process_data():
             skills_json = row['Skill Matrix Results']
             
             try:
+                # Clean the JSON string first
+                skills_json_clean = skills_json.strip()
+                
+                # Try to fix common JSON issues
+                if skills_json_clean.startswith('{') and not skills_json_clean.endswith('}'):
+                    # Try to find where the JSON might be truncated
+                    last_quote = skills_json_clean.rfind('"')
+                    if last_quote > 0:
+                        # Try to close the JSON properly
+                        skills_json_clean = skills_json_clean[:last_quote+1] + '}'
+                
+                # Handle potential extra data after JSON
+                if skills_json_clean.count('}') > 1:
+                    # Find the first complete JSON object
+                    brace_count = 0
+                    end_pos = 0
+                    for i, char in enumerate(skills_json_clean):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                end_pos = i + 1
+                                break
+                    if end_pos > 0:
+                        skills_json_clean = skills_json_clean[:end_pos]
+                
                 # Parse the JSON skills data
-                skills_dict = json.loads(skills_json)
+                skills_dict = json.loads(skills_json_clean)
                 
                 # Process each skill for this attorney
                 for skill, score in skills_dict.items():
                     # Clean skill name and ensure score is numeric
                     skill_clean = skill.strip()
-                    score_clean = float(score) if isinstance(score, (int, float, str)) else 0
+                    try:
+                        score_clean = float(score) if isinstance(score, (int, float, str)) else 0
+                    except (ValueError, TypeError):
+                        score_clean = 0
                     
                     # Add to all_skills tracking
                     if skill_clean not in all_skills:
@@ -59,11 +89,65 @@ def load_and_process_data():
                     })
                     
             except (json.JSONDecodeError, ValueError) as e:
-                st.warning(f"Could not parse skills data for {name}: {e}")
+                st.warning(f"⚠️ Could not parse skills data for {name}: {str(e)[:100]}...")
+                # Add a placeholder entry so we don't lose the attorney completely
+                attorneys_data.append({
+                    'Attorney': name,
+                    'Skill': 'Data Parsing Error',
+                    'Score': 0
+                })
                 continue
         
         # Create DataFrame
         df = pd.DataFrame(attorneys_data)
+        
+        # Manually add Hugh Kerr and Jeremy Budd (problematic JSON entries)
+        manual_attorneys = {
+            "Hugh Kerr": {
+                "M&A (Skill 120)": 7, "Escrow Agreements (Skill 69)": 3, "Founder Agreements (Skill 79)": 3, 
+                "Commercial Contracts (Skill 19)": 6, "Debt & Equity Financing (Skill 39)": 6, "Corporate Reorganization (Skill 30)": 3, 
+                "Non-Disclosure Agreements (Skill 131)": 5, "Master Services Agreements (Skill 121)": 6, 
+                "Procurement (public) & RFPs (Skill 148)": 5, "Procurement (private) & RFPs (Skill 147)": 5, 
+                "Purchase and Sale Agreements (Skill 154)": 7, "Affiliate Marketing Agreements (Skill 4)": 3, 
+                "Waste Management and Recycling (Skill 168)": 3, "Intellectual Property Licensing (Skill 99)": 3, 
+                "Technology Licensing—Hardware (Skill 163)": 5, "Drug, Alcohol, Gaming Regulatory (Skill 49)": 2, 
+                "Independent Contractor Agreements (Skill 91)": 3, "Distribution and Supply Agreements (Skill 47)": 7, 
+                "Private Equity and Venture Capital (Skill 145)": 5, "Commercial Real Estate Transactions (Skill 20)": 3, 
+                "Private Company Corporate Governance (Skill 144)": 5, "Equity Compensation or Incentive Plans (Skill 68)": 3, 
+                "Joint Ventures and Strategic Alliances (Skill 107)": 3, "Shareholder and Partnership Agreements (Skill 158)": 7, 
+                "Product Warranties/Agreement Warranties (Skill 150)": 3, "Bankrupcty and Insolvency (Debtor/Creditor) (Skill 11)": 3, 
+                "Professional Services Agreements and related SOWs (Skill 151)": 3, "Formation and Entity Creation/Operating Agreements (Skill 78)": 3
+            },
+            "Jeremy Budd": {
+                "M&A (Skill 120)": 10, "Oil and Gas Regulation (Skill 134)": 9, "Mining (Skill 126)": 8, 
+                "Commercial Contracts (Skill 19)": 8, "Debt & Equity Financing (Skill 39)": 7, 
+                "Securities and Capital Markets (Skill 157)": 7, "Corporate Bylaws, Records and Governance (Skill 29)": 6, 
+                "Purchase and Sale Agreements (Skill 154)": 6, "Joint Ventures and Strategic Alliances (Skill 107)": 6, 
+                "Corporate Reorganization (Skill 30)": 5, "Energy Contracts and Agreements (Skill 61)": 5, 
+                "Private Equity and Venture Capital (Skill 145)": 5, "Due Diligence and Valuation (Skill 50)": 5, 
+                "Cross-Border Transactions (Skill 33)": 4, "Master Services Agreements (Skill 121)": 4, 
+                "Professional Services Agreements and related SOWs (Skill 151)": 4
+            }
+        }
+        
+        # Add manual entries to the data
+        for name, skills_dict in manual_attorneys.items():
+            # Remove any existing "Data Parsing Error" entries for these attorneys
+            df = df[~((df['Attorney'] == name) & (df['Skill'] == 'Data Parsing Error'))]
+            
+            for skill, score in skills_dict.items():
+                # Add to all_skills tracking
+                if skill not in all_skills:
+                    all_skills[skill] = []
+                all_skills[skill].append(float(score))
+                
+                # Add to dataframe
+                new_row = pd.DataFrame({
+                    'Attorney': [name],
+                    'Skill': [skill],
+                    'Score': [float(score)]
+                })
+                df = pd.concat([df, new_row], ignore_index=True)
         
         # Calculate firm-level statistics
         firm_stats = {}
@@ -172,10 +256,33 @@ def main():
         st.info("📁 Expected file format: CSV with columns 'Name' and 'Skill Matrix Reuslts' (or 'Skill Matrix Results')")
         st.stop()
     
+    # Data diagnostics
+    total_attorneys_in_csv = len(pd.read_csv('Caravel_Results.csv')) if 'Caravel_Results.csv' else 0
+    attorneys_with_skills = df['Attorney'].nunique()
+    attorneys_with_errors = df[df['Skill'] == 'Data Parsing Error']['Attorney'].nunique()
+    
     # Display data summary in sidebar
     st.sidebar.success(f"✅ Data loaded automatically!")
-    st.sidebar.info(f"📊 {df['Attorney'].nunique()} attorneys")
+    st.sidebar.info(f"📊 {attorneys_with_skills} attorneys with valid data")
     st.sidebar.info(f"🎯 {len(firm_stats)} unique skills")
+    
+    if attorneys_with_errors > 0:
+        st.sidebar.warning(f"⚠️ {attorneys_with_errors} attorneys with data issues")
+        
+    if total_attorneys_in_csv != attorneys_with_skills:
+        st.sidebar.error(f"📋 Expected {total_attorneys_in_csv} attorneys, got {attorneys_with_skills}")
+        
+        # Add expandable section to show problematic attorneys
+        with st.sidebar.expander("🔍 Data Issues Details"):
+            problematic_attorneys = df[df['Skill'] == 'Data Parsing Error']['Attorney'].unique()
+            if len(problematic_attorneys) > 0:
+                st.write("Attorneys with JSON parsing errors:")
+                for attorney in problematic_attorneys:
+                    st.write(f"• {attorney}")
+            
+            missing_count = total_attorneys_in_csv - attorneys_with_skills
+            if missing_count > 0:
+                st.write(f"• {missing_count} attorneys completely missing from processed data")
     
     # Sidebar
     st.sidebar.title("Navigation")
@@ -186,7 +293,7 @@ def main():
         ["Firm Overview", "Attorney Profile", "Skill Comparison"]
     )
     
-    if page == "Firm Overview":
+    with tab1:
         st.header("📊 Firm-Level Skills Analysis")
         
         # Create two columns for top and bottom skills
@@ -227,7 +334,7 @@ def main():
         with col4:
             st.metric("Total Attorneys", df['Attorney'].nunique())
     
-    elif page == "Attorney Profile":
+    with tab2:
         st.header("👤 Individual Attorney Analysis")
         
         # Attorney selection
@@ -247,28 +354,46 @@ def main():
                 st.plotly_chart(fig_radar, use_container_width=True)
                 
             with col2:
-                # Attorney statistics
-                st.subheader("📊 Attorney Statistics")
-                total_skills = len(attorney_data)
-                avg_score = attorney_data['Score'].mean()
-                max_score = attorney_data['Score'].max()
-                top_skill = attorney_data.iloc[0]['Skill']
+                # Attorney skill rankings
+                st.subheader("🏆 Skill Rankings")
                 
-                st.metric("Total Skills", total_skills)
-                st.metric("Average Score", f"{avg_score:.2f}")
-                st.metric("Highest Score", max_score)
-                st.metric("Top Skill", top_skill.split(" (")[0] if "(" in top_skill else top_skill)
+                # Create a ranking display
+                attorney_data_clean = attorney_data.copy()
+                attorney_data_clean['Rank'] = range(1, len(attorney_data_clean) + 1)
+                attorney_data_clean['Skill_Clean'] = attorney_data_clean['Skill'].apply(
+                    lambda x: x.split(" (")[0] if "(" in x else x
+                )
+                
+                # Show top 10 skills with medals/rankings
+                top_10 = attorney_data_clean.head(10)
+                
+                for idx, row in top_10.iterrows():
+                    rank = row['Rank']
+                    skill = row['Skill_Clean']
+                    score = row['Score']
+                    
+                    # Add medals for top 3
+                    if rank == 1:
+                        medal = "🥇"
+                    elif rank == 2:
+                        medal = "🥈"
+                    elif rank == 3:
+                        medal = "🥉"
+                    else:
+                        medal = f"#{rank}"
+                    
+                    st.metric(
+                        label=f"{medal} {skill}",
+                        value=f"{score}/10",
+                        delta=f"Rank {rank}"
+                    )
             
             # Full skills table
             st.plotly_chart(fig_bar, use_container_width=True)
             
             # Skills table
-            st.subheader(f"📋 {selected_attorney} - Complete Skill Set")
-            display_attorney_data = attorney_data.copy()
-            display_attorney_data['Skill_Clean'] = display_attorney_data['Skill'].apply(
-                lambda x: x.split(" (")[0] if "(" in x else x
-            )
-            display_attorney_data = display_attorney_data[['Skill_Clean', 'Score']].rename(
+            st.subheader(f"📋 {selected_attorney} - Complete Skill Rankings")
+            display_attorney_data = attorney_data_clean[['Rank', 'Skill_Clean', 'Score']].rename(
                 columns={'Skill_Clean': 'Skill Area', 'Score': 'Proficiency Score'}
             )
             
@@ -279,7 +404,7 @@ def main():
                 hide_index=True
             )
     
-    elif page == "Skill Comparison":
+    with tab3:
         st.header("🔍 Skill Comparison Analysis")
         
         # Skill selection

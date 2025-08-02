@@ -279,7 +279,7 @@ def main():
     # Display data summary in sidebar
     st.sidebar.success(f"✅ Data loaded automatically!")
     st.sidebar.info(f"📊 {attorneys_with_skills} attorneys with valid data")
-    st.sidebar.info(f"🎯 {len(firm_stats)} unique skills")
+    st.sidebar.info(f"🎯 168 unique skills")
     
     if attorneys_with_errors > 0:
         st.sidebar.warning(f"⚠️ {attorneys_with_errors} attorneys with data issues")

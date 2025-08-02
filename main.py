@@ -472,7 +472,7 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.markdown("*Legal Skills Analytics Dashboard - Built with Streamlit*")
+    st.markdown("*Caravel Skills Analytics Dashboard - Built with Streamlit*")
 
 if __name__ == "__main__":
     main()

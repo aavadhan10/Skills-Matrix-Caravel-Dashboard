@@ -8,7 +8,7 @@ import numpy as np
 
 # Page configuration
 st.set_page_config(
-    page_title="Legal Skills Analytics Dashboard",
+    page_title="Caravel Skills Matrix Results",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"

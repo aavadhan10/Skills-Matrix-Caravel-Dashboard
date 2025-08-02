@@ -8,7 +8,7 @@ import numpy as np
 
 # Page configuration
 st.set_page_config(
-    page_title="Caravel Skills Matrix Results",
+    page_title="Legal Skills Analytics Dashboard",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -89,13 +89,16 @@ def load_and_process_data():
                     })
                     
             except (json.JSONDecodeError, ValueError) as e:
-                st.warning(f"⚠️ Could not parse skills data for {name}: {str(e)[:100]}...")
-                # Add a placeholder entry so we don't lose the attorney completely
-                attorneys_data.append({
-                    'Attorney': name,
-                    'Skill': 'Data Parsing Error',
-                    'Score': 0
-                })
+                # Skip showing warnings for Hugh Kerr and Jeremy Budd since we manually add their data
+                if name not in ["Hugh Kerr", "Jeremy Budd"]:
+                    st.warning(f"⚠️ Could not parse skills data for {name}: {str(e)[:100]}...")
+                    # Add a placeholder entry so we don't lose the attorney completely
+                    attorneys_data.append({
+                        'Attorney': name,
+                        'Skill': 'Data Parsing Error',
+                        'Score': 0
+                    })
+                # For Hugh Kerr and Jeremy Budd, just skip silently - their data will be added manually
                 continue
         
         # Create DataFrame
@@ -472,7 +475,7 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.markdown("*Caravel Skills Analytics Dashboard - Built with Streamlit*")
+    st.markdown("*Legal Skills Analytics Dashboard - Built with Streamlit*")
 
 if __name__ == "__main__":
     main()

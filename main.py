@@ -308,6 +308,9 @@ def main():
         ["Firm Overview", "Attorney Profile", "Skill Comparison"]
     )
     
+    # Create tabs for the main content
+    tab1, tab2, tab3 = st.tabs(["Firm Overview", "Attorney Profile", "Skill Comparison"])
+    
     with tab1:
         st.header("📊 Firm-Level Skills Analysis")
         

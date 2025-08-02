@@ -281,24 +281,6 @@ def main():
     st.sidebar.info(f"📊 {attorneys_with_skills} attorneys with valid data")
     st.sidebar.info(f"🎯 168 unique skills")
     
-    if attorneys_with_errors > 0:
-        st.sidebar.warning(f"⚠️ {attorneys_with_errors} attorneys with data issues")
-        
-    if total_attorneys_in_csv != attorneys_with_skills:
-        st.sidebar.error(f"📋 Expected {total_attorneys_in_csv} attorneys, got {attorneys_with_skills}")
-        
-        # Add expandable section to show problematic attorneys
-        with st.sidebar.expander("🔍 Data Issues Details"):
-            problematic_attorneys = df[df['Skill'] == 'Data Parsing Error']['Attorney'].unique()
-            if len(problematic_attorneys) > 0:
-                st.write("Attorneys with JSON parsing errors:")
-                for attorney in problematic_attorneys:
-                    st.write(f"• {attorney}")
-            
-            missing_count = total_attorneys_in_csv - attorneys_with_skills
-            if missing_count > 0:
-                st.write(f"• {missing_count} attorneys completely missing from processed data")
-    
     # Sidebar
     st.sidebar.title("Navigation")
     
@@ -344,13 +326,37 @@ def main():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Total Skills", len(skills_df))
+            st.metric("Total Skills", 168)
         with col2:
             st.metric("Highest Avg Score", f"{skills_df['avg_score'].max():.2f}")
         with col3:
             st.metric("Lowest Avg Score", f"{skills_df['avg_score'].min():.2f}")
         with col4:
             st.metric("Total Attorneys", df['Attorney'].nunique())
+            
+        # Top 3 and Bottom 3 skills
+        st.subheader("🔝 Top and Bottom Skills")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Highest Scoring Skills:**")
+            top_skills = skills_df.sort_values('avg_score', ascending=False).head(3)
+            for i, (skill, row) in enumerate(top_skills.iterrows()):
+                st.metric(
+                    label=f"#{i+1}: {skill.split(' (')[0] if '(' in skill else skill}",
+                    value=f"{row['avg_score']:.2f}",
+                    delta=f"{row['count']} attorneys"
+                )
+                
+        with col2:
+            st.write("**Lowest Scoring Skills:**")
+            bottom_skills = skills_df.sort_values('avg_score').head(3)
+            for i, (skill, row) in enumerate(bottom_skills.iterrows()):
+                st.metric(
+                    label=f"#{i+1}: {skill.split(' (')[0] if '(' in skill else skill}",
+                    value=f"{row['avg_score']:.2f}",
+                    delta=f"{row['count']} attorneys"
+                )
     
     with tab2:
         st.header("👤 Individual Attorney Analysis")

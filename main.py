@@ -132,8 +132,8 @@ def load_and_process_data():
         
         # Add manual entries to the data
         for name, skills_dict in manual_attorneys.items():
-            # Remove any existing "Data Parsing Error" entries for these attorneys
-            df = df[~((df['Attorney'] == name) & (df['Skill'] == 'Data Parsing Error'))]
+            # Remove any existing entries for these attorneys (both errors and partial data)
+            df = df[df['Attorney'] != name]
             
             for skill, score in skills_dict.items():
                 # Add to all_skills tracking
@@ -149,10 +149,22 @@ def load_and_process_data():
                 })
                 df = pd.concat([df, new_row], ignore_index=True)
         
-        # Calculate firm-level statistics
+        # Calculate firm-level statistics (recalculate after manual additions)
         firm_stats = {}
-        for skill in all_skills:
-            scores = all_skills[skill]
+        all_skills_final = {}
+        
+        # Recalculate all skills from the final dataframe
+        for _, row in df.iterrows():
+            skill = row['Skill']
+            score = row['Score']
+            
+            if skill not in all_skills_final:
+                all_skills_final[skill] = []
+            all_skills_final[skill].append(score)
+        
+        # Calculate firm stats from final skill set
+        for skill in all_skills_final:
+            scores = all_skills_final[skill]
             if scores:  # Make sure we have data
                 firm_stats[skill] = {
                     'avg_score': np.mean(scores),
